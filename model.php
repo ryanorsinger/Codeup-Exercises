@@ -1,16 +1,14 @@
 <?php
 
-define('DB_HOST', '127.0.0.1');
-define('DB_NAME', 'adlister_db');
-define('DB_USER', 'adlister_user');
-define('DB_PASS', 'adlister_password');
+require 'adlister_logins.php';
 
 class Model {
 
     protected static $dbc;
     protected static $table;
 
-    public $attributes = array();
+    // $attributes holds unassigned properties for use by __get and __set magic methods.
+    public $attributes;
 
     /*
      * Constructor
@@ -37,8 +35,6 @@ class Model {
 
             // Tell PDO to throw exceptions on error
             self::$dbc->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-
-            echo "Connected to " . DB_HOST . "." . PHP_EOL;
         }
     }
 
@@ -69,14 +65,7 @@ class Model {
     public function save()
     {
         // @TODO: Perform the proper action - if the `id` is set, this is an update, if not it is a insert
-        $query = "SELECT * FROM :table WHERE email = :email";
-        $stmt = self::$dbc->prepare($query);
-        $stmt->bindValue(':table', static::$table, PDO::PARAM_STR);
-        $stmt->bindValue(':email',      $this->email, PDO::PARAM_STR);
-        $stmt->execute();
-        $result = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-        if(!empty($result['email'])) {
+        if(!empty($this->attributes['id'])) {
             $this->update();
         } else {
             $this->insert();
@@ -85,32 +74,53 @@ class Model {
 
     protected function insert()
     {
-        echo 'insert() method was called by the save() method because the record with this email at $this->attributes["email"] does not exist' . PHP_EOL;
-        echo "that means we'll need to insert it!" . PHP_EOL;
-        // $query = 'INSERT INTO users columnName VALUES (:)';
-        // prepare
-        // bind
-        // execute
+        // Get connection to the database
+        self::dbConnect();
+
+        $table = static::$table;
+
+        $query = "INSERT INTO $table (first_name, last_name, username, password)
+                    VALUES (':first_name', ':last_name', ':username', ':password');";
+
+        $query = "INSERT INTO $table (";
+
+        $stmt = self::$dbc->prepare($query);
+        $stmt->bindValue(':first_name', $this->first_name,  PDO::PARAM_STR);
+        $stmt->bindValue(':last_name',  $this->last_name,   PDO::PARAM_STR);
+        $stmt->bindValue(':username',   $this->username,    PDO::PARAM_STR);
+        $stmt->bindValue(':password',   $this->password,    PDO::PARAM_STR);
+        $stmt->execute();
+
+        // @TODO: After insert, add the id back to the attributes array so the object can properly reflect the id
+
     }
 
     protected function update()
     {
-        // prepare our update
-        // bind values
-        // execute
-    }
+        // Get connection to the database
+        self::dbConnect();
 
-
-
-        // @TODO: Ensure there are attributes before attempting to save
+        $table = static::$table;
 
         // @TODO: Ensure that update is properly handled with the id key
-
-        // @TODO: After insert, add the id back to the attributes array so the object can properly reflect the id
-
-        // @TODO: You will need to iterate through all the attributes to build the prepared query
+        $query = "UPDATE $table SET
+                    first_name = :first_name,
+                    last_name = :last_name,
+                    email = :email,
+                    username = :username,
+                    password = :password
+                    WHERE id = :id";
 
         // @TODO: Use prepared statements to ensure data security
+        $stmt = self::$dbc->prepare($query);
+        $stmt->bindValue(':first_name', $this->first_name,  PDO::PARAM_STR);
+        $stmt->bindValue(':last_name',  $this->last_name,   PDO::PARAM_STR);
+        $stmt->bindValue(':username',   $this->username,    PDO::PARAM_STR);
+        $stmt->bindValue(':email',      $this->email,       PDO::PARAM_STR);
+        $stmt->bindValue(':password',   $this->password,    PDO::PARAM_STR);
+        $stmt->bindValue(':id',         $this->id,          PDO::PARAM_INT);
+        $stmt->execute();
+    }
 
     /*
      * Find a record based on an id
@@ -129,7 +139,7 @@ class Model {
         $stmt->execute();
 
         // @TODO: Store the resultset in a variable named $result
-        $result = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
 
         // The following code will set the attributes on the calling object based on the result variable's contents
 
@@ -158,5 +168,20 @@ class Model {
             $instance->attributes = $result;
         }
         return $instance;
+    }
+
+    public function delete()
+    {
+        self::dbConnect();
+
+        $table = static::$table;
+
+        $id = $this->attributes['id'];
+
+        $query = "DELETE FROM $table WHERE id = :id";
+        $stmt = self::$dbc->prepare($query);
+        $stmt->bindValue(':id', $id, PDO::PARAM_INT);
+        $stmt->execute();
+
     }
 }
